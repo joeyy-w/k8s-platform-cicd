@@ -1,0 +1,55 @@
+name: Deploy to Kubernetes Platform
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Build Docker Image
+      run: |
+        cd apps/sample-microservice
+        docker build -t sample-microservice:latest .
+
+    - name: Test Container
+      run: |
+        cd apps/sample-microservice
+        docker run -d --name test-container sample-microservice:latest
+        sleep 10
+        docker exec test-container curl -s http://localhost:8090/health | grep healthy
+        docker stop test-container
+        docker rm test-container
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Configure Kubernetes
+      run: |
+        mkdir -p ~/.kube
+        echo "${{ secrets.K8S_CONFIG }}" > ~/.kube/config
+
+    - name: Deploy Application
+      run: |
+        kubectl apply -f manifests/base/deployment.yaml
+        kubectl apply -f manifests/base/service.yaml
+
+    - name: Wait for Deployment
+      run: |
+        kubectl rollout status deployment/sample-microservice -n guestbook --timeout=300s
+
+    - name: Verify Deployment
+      run: |
+        kubectl get pods -l app=sample-microservice -n guestbook
+        ./scripts/integration-test.sh

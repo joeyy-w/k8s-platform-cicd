@@ -1,0 +1,11 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+resources:
+- deployment.yaml
+- service.yaml
+commonLabels:
+  app: sample-microservice
+images:
+- name: sample-microservice
+  newName: ghcr.io/your-username/sample-microservice
+  newTag: latest

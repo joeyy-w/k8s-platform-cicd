@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sample-microservice
+  labels:
+    app: sample-microservice
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sample-microservice
+  template:
+    metadata:
+      labels:
+        app: sample-microservice
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8090"
+        prometheus.io/path: "/metrics"
+    spec:
+      containers:
+      - name: app
+        image: sample-microservice:latest
+        ports:
+        - containerPort: 8090
+        env:
+        - name: ENVIRONMENT
+          value: "base"
+        - name: PORT
+          value: "8090"
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "50m"
+          limits:
+            memory: "128Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8090
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8090
+          initialDelaySeconds: 5
+          periodSeconds: 5
