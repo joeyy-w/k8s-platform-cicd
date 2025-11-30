@@ -25,24 +25,24 @@ jobs:
         cache-from: type=gha
         cache-to: type=gha,mode=max
 
-    - name: Test Container
+    - name: Test Container with Port Exposure
       run: |
-        # Start container and capture output
-        docker run -d --name test-container sample-microservice:latest
+        # Start container with port exposure
+        docker run -d -p 8090:8090 --name test-container sample-microservice:latest
         
-        # Wait longer for app to start
-        sleep 15
+        # Wait for app to start
+        sleep 10
         
-        # Check if container is still running
+        # Check if container is running
         if ! docker ps | grep test-container; then
           echo "❌ Container exited prematurely"
           docker logs test-container
           exit 1
         fi
         
-        # Test health endpoint with retries
+        # Test health endpoint from host (using exposed port)
         for i in {1..5}; do
-          if docker exec test-container curl -s http://localhost:8090/health | grep -q healthy; then
+          if curl -s http://localhost:8090/health | grep -q healthy; then
             echo "✅ Health endpoint working (attempt $i)"
             break
           else
@@ -52,7 +52,7 @@ jobs:
         done
         
         # Final test
-        if docker exec test-container curl -s http://localhost:8090/health | grep -q healthy; then
+        if curl -s http://localhost:8090/health | grep -q healthy; then
           echo "✅ Final health check passed"
         else
           echo "❌ Health endpoint failed after retries"
