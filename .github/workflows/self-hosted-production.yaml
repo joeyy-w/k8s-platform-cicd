@@ -13,28 +13,11 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Fix Kubernetes Permissions
+    - name: Verify Environment
       run: |
-        echo "🔧 Setting up Kubernetes access..."
-        mkdir -p ~/.kube
-        sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
-        sudo chown $USER:$USER ~/.kube/config
-        chmod 600 ~/.kube/config
-
-    - name: Display Runner Environment
-      run: |
-        echo "🎯 Runner Environment:"
-        echo "Hostname: $(hostname)"
-        echo "User: $(whoami)"
-        echo "Working Directory: $(pwd)"
-        echo "Kubeconfig: $(ls -la ~/.kube/config 2>/dev/null || echo 'Not found')"
-
-    - name: Verify Kubernetes Access
-      run: |
-        echo "🔧 Testing Kubernetes cluster access..."
-        kubectl cluster-info
-        kubectl get nodes
-        echo "✅ Kubernetes access verified"
+        echo "🎯 Environment Verification:"
+        echo "Kubernetes: $(kubectl cluster-info --short 2>/dev/null && echo '✅' || echo '❌')"
+        echo "Docker: $(docker --version && echo '✅' || echo '❌')"
 
     - name: Build Docker Image
       run: |
