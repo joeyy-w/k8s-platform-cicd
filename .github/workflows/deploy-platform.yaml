@@ -27,15 +27,47 @@ jobs:
 
     - name: Test Container
       run: |
+        # Start container and capture output
         docker run -d --name test-container sample-microservice:latest
-        sleep 10
-        docker exec test-container curl -s http://localhost:8090/health | grep healthy
+        
+        # Wait longer for app to start
+        sleep 15
+        
+        # Check if container is still running
+        if ! docker ps | grep test-container; then
+          echo "❌ Container exited prematurely"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Test health endpoint with retries
+        for i in {1..5}; do
+          if docker exec test-container curl -s http://localhost:8090/health | grep -q healthy; then
+            echo "✅ Health endpoint working (attempt $i)"
+            break
+          else
+            echo "⏳ Health endpoint not ready (attempt $i), waiting..."
+            sleep 5
+          fi
+        done
+        
+        # Final test
+        if docker exec test-container curl -s http://localhost:8090/health | grep -q healthy; then
+          echo "✅ Final health check passed"
+        else
+          echo "❌ Health endpoint failed after retries"
+          docker logs test-container
+          exit 1
+        fi
+        
+        # Clean up
         docker stop test-container
         docker rm test-container
 
   deploy:
     name: Deploy to Kubernetes
     needs: build-and-test
+    if: needs.build-and-test.result == 'success'
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
@@ -45,6 +77,7 @@ jobs:
       run: |
         mkdir -p ~/.kube
         echo "${{ secrets.K8S_CONFIG }}" | base64 -d > ~/.kube/config
+        kubectl cluster-info
 
     - name: Create Namespace
       run: |
@@ -57,10 +90,11 @@ jobs:
 
     - name: Wait for Deployment
       run: |
-        kubectl rollout status deployment/sample-microservice -n guestbook --timeout=300s
+        timeout 300 bash -c 'until kubectl rollout status deployment/sample-microservice -n guestbook; do sleep 10; done'
 
     - name: Verify Deployment
       run: |
         kubectl get pods -l app=sample-microservice -n guestbook
+        kubectl wait --for=condition=ready pod -l app=sample-microservice -n guestbook --timeout=300s
         kubectl run test --rm -i --restart=Never --image=curlimages/curl -- \
           -s http://sample-microservice.guestbook.svc.cluster.local/health | grep healthy
