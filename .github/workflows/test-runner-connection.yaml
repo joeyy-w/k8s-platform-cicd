@@ -1,0 +1,27 @@
+name: Test Runner Connection
+
+on:
+  workflow_dispatch:
+
+jobs:
+  test:
+    runs-on: self-hosted
+    steps:
+    - name: Test Connection
+      run: |
+        echo "✅ Runner is connected!"
+        echo "Host: $(hostname)"
+        echo "Directory: $(pwd)"
+        echo "Kubernetes: $(kubectl cluster-info --short 2>/dev/null || echo 'Not configured')"
+        
+    - name: Check Environment
+      run: |
+        echo "🔧 Environment Check:"
+        echo "Docker: $(docker --version)"
+        echo "Kubectl: $(kubectl version --short 2>/dev/null || echo 'Not available')"
+        echo "Git: $(git --version)"
+        
+    - name: Simple Kubernetes Test
+      run: |
+        echo "🔍 Testing Kubernetes access..."
+        kubectl get nodes && echo "✅ Kubernetes access working!" || echo "⚠️ Kubernetes access issue"
