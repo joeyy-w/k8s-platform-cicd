@@ -1,0 +1,89 @@
+name: 🏠 Self-Hosted Runner - Production Deployment
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build-test-deploy:
+    name: 🚀 Build, Test & Deploy
+    runs-on: self-hosted
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Fix Kubernetes Permissions
+      run: |
+        echo "🔧 Setting up Kubernetes access..."
+        mkdir -p ~/.kube
+        sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+        sudo chown $USER:$USER ~/.kube/config
+        chmod 600 ~/.kube/config
+
+    - name: Display Runner Environment
+      run: |
+        echo "🎯 Runner Environment:"
+        echo "Hostname: $(hostname)"
+        echo "User: $(whoami)"
+        echo "Working Directory: $(pwd)"
+        echo "Kubeconfig: $(ls -la ~/.kube/config 2>/dev/null || echo 'Not found')"
+
+    - name: Verify Kubernetes Access
+      run: |
+        echo "🔧 Testing Kubernetes cluster access..."
+        kubectl cluster-info
+        kubectl get nodes
+        echo "✅ Kubernetes access verified"
+
+    - name: Build Docker Image
+      run: |
+        echo "🏗️ Building production microservice..."
+        cd apps/sample-microservice
+        docker build -t sample-microservice:prod .
+        echo "✅ Docker image built successfully"
+
+    - name: Test Application
+      run: |
+        echo "🧪 Testing application health endpoints..."
+        docker run -d --name test-container sample-microservice:prod
+        sleep 10
+        
+        if docker exec test-container curl -s http://localhost:8090/health | grep -q healthy; then
+          echo "✅ Health endpoint working"
+        else
+          echo "❌ Health check failed"
+          docker logs test-container
+          exit 1
+        fi
+        
+        docker stop test-container
+        docker rm test-container
+        echo "✅ Application testing completed"
+
+    - name: Deploy to Kubernetes
+      run: |
+        echo "🚀 Deploying to Kubernetes cluster..."
+        kubectl create namespace guestbook --dry-run=client -o yaml | kubectl apply -f -
+        kubectl apply -f manifests/base/deployment.yaml -n guestbook
+        kubectl apply -f manifests/base/service.yaml -n guestbook
+        echo "✅ Application deployed to Kubernetes"
+
+    - name: Verify Deployment
+      run: |
+        echo "🔍 Verifying deployment status..."
+        kubectl rollout status deployment/sample-microservice -n guestbook --timeout=300s
+        kubectl get pods -l app=sample-microservice -n guestbook -o wide
+        
+        kubectl run deployment-test --rm -i --restart=Never --image=curlimages/curl -- \
+          -s http://sample-microservice.guestbook.svc.cluster.local/health | grep healthy
+        echo "✅ Deployment verification successful"
+
+    - name: Production Success Report
+      run: |
+        echo "🎉 PRODUCTION DEPLOYMENT COMPLETE!"
+        echo "=================================="
+        kubectl get deployment sample-microservice -n guestbook
+        kubectl get service sample-microservice -n guestbook
+        kubectl get pods -l app=sample-microservice -n guestbook -o wide
+        echo "🚀 SELF-HOSTED RUNNER CI/CD PIPELINE - FULLY OPERATIONAL!"

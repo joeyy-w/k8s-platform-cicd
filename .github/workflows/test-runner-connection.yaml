@@ -7,19 +7,24 @@ jobs:
   test:
     runs-on: self-hosted
     steps:
+    - name: Fix Kubernetes Permissions
+      run: |
+        mkdir -p ~/.kube
+        sudo cp /etc/rancher/k3s/k3s.yaml ~/.kube/config
+        sudo chown $USER:$USER ~/.kube/config
+        chmod 600 ~/.kube/config
+
     - name: Test Connection
       run: |
         echo "✅ Runner is connected!"
         echo "Host: $(hostname)"
-        echo "Directory: $(pwd)"
-        echo "Kubernetes: $(kubectl cluster-info --short 2>/dev/null || echo 'Not configured')"
+        echo "User: $(whoami)"
         
     - name: Check Environment
       run: |
         echo "🔧 Environment Check:"
         echo "Docker: $(docker --version)"
         echo "Kubectl: $(kubectl version --short 2>/dev/null || echo 'Not available')"
-        echo "Git: $(git --version)"
         
     - name: Simple Kubernetes Test
       run: |
