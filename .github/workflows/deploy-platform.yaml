@@ -13,14 +13,20 @@ jobs:
     - name: Checkout Code
       uses: actions/checkout@v4
 
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
     - name: Build Docker Image
-      run: |
-        cd apps/sample-microservice
-        docker build -t sample-microservice:latest .
+      uses: docker/build-push-action@v4
+      with:
+        context: ./apps/sample-microservice
+        tags: sample-microservice:latest
+        load: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Test Container
       run: |
-        cd apps/sample-microservice
         docker run -d --name test-container sample-microservice:latest
         sleep 10
         docker exec test-container curl -s http://localhost:8090/health | grep healthy
@@ -38,12 +44,16 @@ jobs:
     - name: Configure Kubernetes
       run: |
         mkdir -p ~/.kube
-        echo "${{ secrets.K8S_CONFIG }}" > ~/.kube/config
+        echo "${{ secrets.K8S_CONFIG }}" | base64 -d > ~/.kube/config
+
+    - name: Create Namespace
+      run: |
+        kubectl create namespace guestbook --dry-run=client -o yaml | kubectl apply -f -
 
     - name: Deploy Application
       run: |
-        kubectl apply -f manifests/base/deployment.yaml
-        kubectl apply -f manifests/base/service.yaml
+        kubectl apply -f manifests/base/deployment.yaml -n guestbook
+        kubectl apply -f manifests/base/service.yaml -n guestbook
 
     - name: Wait for Deployment
       run: |
@@ -52,4 +62,5 @@ jobs:
     - name: Verify Deployment
       run: |
         kubectl get pods -l app=sample-microservice -n guestbook
-        ./scripts/integration-test.sh
+        kubectl run test --rm -i --restart=Never --image=curlimages/curl -- \
+          -s http://sample-microservice.guestbook.svc.cluster.local/health | grep healthy
